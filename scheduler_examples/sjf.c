@@ -39,9 +39,24 @@ void sjf_scheduler(uint32_t current_time_ms, queue_t *rq, pcb_t **cpu_task) {
         }
     }
     if (*cpu_task == NULL) {            // If CPU is idle
-        // procura o elem com menot time ms
-        // Remove the element from the queue
-        // assign the task to the cpu
+
+        // Procurar a tarefa com menor tempo de execução
+        queue_elem_t *it = rq->head;
+        queue_elem_t *shortest_elem = it;
+        while (it) {
+            if (it->pcb->time_ms < shortest_elem->pcb->time_ms) {
+                shortest_elem = it;
+            }
+            it = it->next;
+        }
         *cpu_task = dequeue_pcb(rq);   // Get next task from ready queue (dequeue from head)
+
+        // Remover da fila e atribuir ao CPU
+        queue_elem_t *removed = remove_queue_elem(rq, shortest_elem);
+        if (removed) {
+            *cpu_task = removed->pcb;
+            free(removed); // liberar o nó da fila, mas manter o PCB
+        }
+
     }
 }
