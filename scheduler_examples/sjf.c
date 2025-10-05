@@ -1,30 +1,27 @@
-#include "sjf.h"
-
+#include "fifo.h"
 #include <stdio.h>
 #include <stdlib.h>
-
-#include "msg.h"
 #include <unistd.h>
+#include "msg.h"
 
 /**
- * @brief First-In-First-Out (FIFO) scheduling algorithm.
+ * @brief Shortest Job First (SJF) scheduling algorithm.
  *
- * This function implements the FIFO scheduling algorithm. If the CPU is not idle it
- * checks if the application is ready and frees the CPU.
- * If the CPU is idle, it selects the next task to run based on the order they were added
- * to the ready queue. The task that has been in the queue the longest is selected to run next.
+ * This function implements the non-preemptive Shortest Job First scheduler.
+ * It selects the task with the shortest total burst time (time_ms) from the ready queue.
+ * Once a task starts running, it continues until completion.
  *
- * @param current_time_ms The current time in milliseconds.
- * @param rq Pointer to the ready queue containing tasks that are ready to run.
- * @param cpu_task Double pointer to the currently running task. This will be updated
- *                 to point to the next task to run.
+ * @param current_time_ms Current time in milliseconds.
+ * @param rq Pointer to the ready queue containing ready tasks.
+ * @param cpu_task Double pointer to the currently running task.
  */
 void sjf_scheduler(uint32_t current_time_ms, queue_t *rq, pcb_t **cpu_task) {
+    // If there is a task currently running
     if (*cpu_task) {
-        (*cpu_task)->ellapsed_time_ms += TICKS_MS;      // Add to the running time of the application/task
+        (*cpu_task)->ellapsed_time_ms += TICKS_MS;
+
+        // If the running task is finished
         if ((*cpu_task)->ellapsed_time_ms >= (*cpu_task)->time_ms) {
-            // Task finished
-            // Send msg to application
             msg_t msg = {
                 .pid = (*cpu_task)->pid,
                 .request = PROCESS_REQUEST_DONE,
@@ -33,30 +30,46 @@ void sjf_scheduler(uint32_t current_time_ms, queue_t *rq, pcb_t **cpu_task) {
             if (write((*cpu_task)->sockfd, &msg, sizeof(msg_t)) != sizeof(msg_t)) {
                 perror("write");
             }
-            // Application finished and can be removed (this is FIFO after all)
-            free((*cpu_task));
-            (*cpu_task) = NULL;
+
+            // Free the finished task and clear CPU
+            free(*cpu_task);
+            *cpu_task = NULL;
         }
     }
-    if (*cpu_task == NULL) {            // If CPU is idle
 
-        // Procurar a tarefa com menor tempo de execução
-        queue_elem_t *it = rq->head;
-        queue_elem_t *shortest_elem = it;
-        while (it) {
-            if (it->pcb->time_ms < shortest_elem->pcb->time_ms) {
-                shortest_elem = it;
+    // If the CPU is idle, select the shortest job from the ready queue
+    if (*cpu_task == NULL && rq->head != NULL) {
+        pcb_t *shortest = NULL;
+        queue_elem_t *prev = NULL, *shortest_prev = NULL;
+        queue_elem_t *curr = rq->head;
+
+        // Find the task with the smallest total burst time
+        while (curr) {
+            pcb_t *task = curr->pcb;
+            if (!shortest || task->time_ms < shortest->time_ms) {
+                shortest = task;
+                shortest_prev = prev;
             }
-            it = it->next;
-        }
-        *cpu_task = dequeue_pcb(rq);   // Get next task from ready queue (dequeue from head)
-
-        // Remover da fila e atribuir ao CPU
-        queue_elem_t *removed = remove_queue_elem(rq, shortest_elem);
-        if (removed) {
-            *cpu_task = removed->pcb;
-            free(removed); // liberar o nó da fila, mas manter o PCB
+            prev = curr;
+            curr = curr->next;
         }
 
+        // Remove the shortest task from the queue
+        if (shortest) {
+            queue_elem_t *to_remove;
+
+            // If the shortest is at the head
+            if (shortest_prev == NULL) {
+                to_remove = rq->head;
+            } else {
+                to_remove = shortest_prev->next;
+            }
+
+            // Remove the element (your queue API already has a function for that)
+            remove_queue_elem(rq, to_remove);
+
+            // Assign the selected task to the CPU
+            *cpu_task = shortest;
+        }
     }
 }
