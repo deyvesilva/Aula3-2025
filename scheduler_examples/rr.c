@@ -3,7 +3,6 @@
 #include <stdlib.h>
 #include "msg.h"
 #include <unistd.h>
-
 #define TIME_SLICE_MS 500  // Quantum of 500 milliseconds
 
 /**

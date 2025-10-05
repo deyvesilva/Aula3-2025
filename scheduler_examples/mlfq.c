@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <stdint.h>
+#include "mlfq.h"
 
 #define NUM_LEVELS      3
 #define TIME_SLICE_MS   500
